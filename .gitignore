@@ -2,10 +2,11 @@ build/
 dist/
 *.dmg
 .venv/
+.venv-model/
 __pycache__/
 
-# ArcFace 가중치는 InsightFace 비상업 연구용 라이선스라 저장소에 넣지 않는다.
-# tools/fetch_arcface.py 로 각자 내려받는다.
+# SFace is Apache-2.0 licensed. Download/convert deterministically with make model.
+# Keep large generated assets out of the source repository.
 Resources/Models/
 *.mlpackage
 *.mlmodelc

@@ -1,752 +1,83 @@
-<div align="center">
+# JoFaceGuard
 
-<img src="docs/banner.png" alt="FaceUnlock — face unlock for the MacBook lock screen" width="760">
+原生 macOS 菜单栏人脸守卫。摄像头连续约 2 秒确认同一个清晰的陌生人后，向 macOS 请求锁屏。Jo、无人、不确定、画面中断和多人同框均不触发锁屏。
 
-### Face unlock for MacBooks that have no Touch ID
+这是 [KINN-CH/FaceUnlock](https://github.com/KINN-CH/FaceUnlock) 的独立 MIT fork，保留五点对齐、坐标处理和向量计算，移除了自动解锁、登录密码、密码注入、FileVault 辅助流程和联网更新。模型采用 **OpenCV SFace → Core ML**，避免原 ArcFace/InsightFace 预训练权重的研究用途限制。来源、具体保留内容、候选比较和许可证见 [UPSTREAM.md](docs/UPSTREAM.md)。
 
-**Look at your Mac and the lock screen opens.**<br>
-A menu bar app that recognizes your face and types your password for you.<br>
-It all runs on the machine — your face never leaves your Mac.
+## Jo 的使用步骤
 
-<sub>ArcFace embeddings · blink liveness check · password sealed by the Secure Enclave · builds without Xcode</sub>
+1. 将 `JoFaceGuard.zip` 解压后的 App 放入「应用程序」，打开 **JoFaceGuard**。菜单栏会出现人脸图标。初始状态为暂停，摄像头关闭。
+2. 点击 **录入 Jo**，由 macOS 提示允许摄像头。光线要足够，画面里只有你；平时戴眼镜就戴着录入。
+3. 跟随 5 个姿态提示，每步点 **采集当前姿态**。每步收集 3 张有效特征，合计 15 张。姿态是操作指引，软件不强制证明你完成了每一种姿态；请按提示做。过暗、模糊、过侧或特征不一致会等待清晰画面。取消不会覆盖原资料。
+4. 点击 **观察识别**。这个模式绝不自动锁屏。先检查正常坐姿、轻微左右转头、常戴的眼镜和正常房间光线；本人应显示 Jo，暗光应显示不确定，无人不应开始计时。让一位知情的其他人试坐，观察是否稳定显示陌生人。
+5. 观察模式连续 5 帧认出 Jo 后，**开启自动锁屏** 按钮可用。开启后，陌生人连续确认约 2 秒才请求锁屏。摄像头启动、检测和推理的耗时另计；这是从第一张合格陌生人画面起算，不是保证入座后正好 2 秒。
+6. 菜单栏 **暂停守卫与摄像头** 会立即使待处理结果失效并停止摄像头。锁屏、休眠、切换用户后也会暂停；解锁后需手动重新观察并开启，避免反复锁屏。
 
-<br>
+关闭设置窗口后，守卫仍可在菜单栏运行；关闭录入窗口会取消录入。退出 App 会停止守卫。不会自动加入登录项。
 
-**맥북 잠금 화면을 얼굴로 여는 메뉴바 앱**<br>
-<sub>카메라가 얼굴을 알아보면 잠금 화면을 대신 풀어줍니다. Touch ID 없는 맥북 사용자가 직접 만들었습니다.<br>
-한국어 문서는 <a href="#한국어">아래쪽</a>에 전부 있습니다.</sub>
+删除资料：窗口右下角 **删除人脸资料**，确认后删除本机钥匙串中的特征。卸载前建议先删除资料，再退出并将 App 移到废纸篓。直接删除 App 不会自动删除钥匙串资料。
 
-[![macOS 14+](https://img.shields.io/badge/macOS-14%2B-000000)](https://github.com/KINN-CH/FaceUnlock/releases)
-[![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-333333)](https://github.com/KINN-CH/FaceUnlock/releases)
-[![Swift](https://img.shields.io/badge/Swift-SwiftUI%20%C2%B7%20CoreML%20%C2%B7%20Vision-F05138?logo=swift&logoColor=white)](Sources)
-[![Release](https://img.shields.io/github/v/release/KINN-CH/FaceUnlock?color=brightgreen)](https://github.com/KINN-CH/FaceUnlock/releases/latest)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![build](https://github.com/KINN-CH/FaceUnlock/actions/workflows/build.yml/badge.svg)](https://github.com/KINN-CH/FaceUnlock/actions/workflows/build.yml)
+## 运行环境与构建
 
-### [⬇︎ Download the latest DMG](https://github.com/KINN-CH/FaceUnlock/releases/latest)
+- macOS 14 或更高、Apple Silicon；本次在 macOS 27.2 / arm64 / Swift 6.4 Command Line Tools 上构建。
+- 摄像头权限；不需要辅助功能权限，不读取登录密码。
+- 从源码构建需要 Apple Command Line Tools。一次性模型转换另需 Python 3.9–3.12，依赖只装在项目虚拟环境。
+- App 运行不需要 Python，也不会下载模型或发出网络请求。
 
-**[▶︎ 설치 가이드 영상 · Watch the install guide](https://youtu.be/3cr4gCYPvxY)**
-
-**[English](#english) · [한국어](#한국어) · [Website](https://kinn-ch.github.io/FaceUnlock/)**
-
-</div>
-
----
-
-## At a glance · 한눈에
-
-|  |  |
-|---|---|
-| **What it does** | Unlocks the macOS lock screen when the camera recognises you. |
-| **How** | Webcam → Vision face detection → ArcFace 512-d embedding → cosine match → blink check → types your login password. |
-| **Where it runs** | Entirely on your Mac. No account, no server, no telemetry. The only network request is an optional once-a-day check for a new release, which you can turn off. |
-| **Needs** | macOS 14+, Apple Silicon, any built-in or external camera. |
-| **What it is not** | Not Apple's Face ID. A 2D webcam cannot measure depth, so a replayed video can defeat it. It does not cover the FileVault boot screen. |
-| **Why it exists** | MacBooks without Touch ID have no biometric unlock at all. Not everyone wears an Apple Watch. |
-
-<sub>이 표의 한국어 설명은 <a href="#동작-방식">동작 방식</a>과 <a href="#시작하기-전에">시작하기 전에</a>에 더 자세히 있습니다.</sub>
-
-<sub>`macos` · `macbook` · `face-unlock` · `faceid` · `face-recognition` · `screen-lock` · `biometrics` · `secure-enclave` · `arcface` · `coreml` · `vision-framework` · `swift` · `swiftui` · `menu-bar-app` · `apple-silicon`</sub>
-
----
-
-<div align="center">
-
-<a id="english"></a>
-
-### English
-
-<sub>한국어 문서는 <a href="#한국어">이 문서 아래쪽</a>에 전부 있습니다.</sub>
-
-</div>
-
-<p align="center">
-  <a href="#before-you-turn-it-on">Before you turn it on</a> ·
-  <a href="#install">Install</a> ·
-  <a href="#first-time-setup">First-time setup</a> ·
-  <a href="#uninstalling">Uninstalling</a> ·
-  <a href="#how-it-works">How it works</a> ·
-  <a href="#the-things-that-fail-quietly">Fails quietly</a> ·
-  <a href="#known-problems">Known problems</a> ·
-  <a href="#development">Development</a> ·
-  <a href="#model">Model</a> ·
-  <a href="#license">License</a>
-</p>
-
-## Before you turn it on
-
-The name is close, but this is not Apple's Face ID. It's a convenience tool,
-not a security control. Four things to know before you switch it on.
-
-**It stops photos, not videos.** A built-in webcam can't measure depth. Face ID
-reads the shape of your face with 30,000 infrared dots; this app sees one flat
-image. It asks you to blink, so a printed photo won't open it — but a video of
-you blinking, played back on a phone, will. That isn't fixable without a depth
-sensor, so there's no plan to fix it.
-
-**Your login password lives on the machine.** macOS gives third-party apps no
-public API for unlocking the screen, so this types the stored password into the
-lock screen for you. Which means it has to be kept in a form that can be
-decrypted. The protections that were available are in place: the symmetric key
-is derived only inside the Secure Enclave (P-256 ECDH → AES-GCM), only the
-ciphertext goes into the Keychain, and moving it to another Mac makes it
-unreadable. The plaintext is handled as `[UInt16]` rather than `String` and
-zeroed right after use. None of that helps against someone who has this Mac and
-is logged into it — the password has to be usable from the lock screen, so it
-can't be gated behind biometrics or a passphrase.
-
-**It doesn't work at the FileVault boot screen.** That screen appears before
-macOS is up, so no app can run there. This only covers the lock screen after
-you've logged in.
-
-**It ships off.** You have to turn it on in Settings.
-
-**The only thing it sends anywhere is an update check.** Once a day it makes a
-single unauthenticated request to the GitHub releases page and reads the latest
-version number. No faces, no password, no usage data, no device identifier —
-GitHub sees your IP address and nothing else. The check exists because v0.1.0
-through v0.1.4 had a bug that left the camera black on the lock screen, and
-*there was no way to tell the people running those versions.* Settings →
-Updates turns it off, and with it off no request is made at all. Downloading
-and installing is always something you do yourself.
-
-Provided with no warranty of any kind. See [LICENSE](LICENSE).
-
-## Install
-
-### From the DMG
-
-**[▶︎ Watch the install guide (video)](https://youtu.be/3cr4gCYPvxY)** — the whole thing, start
-to finish, if you would rather follow along than read.
-
-Download `FaceUnlock.dmg` from
-[Releases](https://github.com/KINN-CH/FaceUnlock/releases) and open it. Drag the
-app to `Applications` as the window shows, then right-click
-`설치 도우미 (Install Helper).command` and choose Open. The helper does the rest.
-
-The catch is that "Open" doesn't work on the first try. The app isn't notarized,
-so macOS blocks it, and you have to approve it **twice**.
-
-1. Right-click the install helper → **Open** (it gets blocked)
-2. System Settings → Privacy & Security → scroll down → **Open Anyway** → password
-3. **Repeat steps 1–2 once more.** The second attempt actually runs.
-
-Twice is normal here. If it opened on the first try, just carry on. Once a
-Terminal window appears you're done — it copies the app, clears the quarantine
-flag, downloads and converts the face model, and launches FaceUnlock. The
-conversion takes a few minutes, and if Python 3.12 is missing it offers to
-install it with Homebrew. The helper speaks English unless your Mac is set to
-Korean.
-
-The model is downloaded separately for licensing reasons. The ArcFace weights
-are under InsightFace's non-commercial research license, so they can't ship in
-the repo or the DMG; the helper fetches them from the official release and puts
-them in `~/Library/Application Support/FaceUnlock/Models/`.
-
-> Going through all that for an unsigned app from a stranger is a genuinely
-> risky habit. If you'd rather not, build from source. That's why the repo is
-> public.
-
-### From source
-
-This is the cleaner path. No quarantine flag, and a stable signature, so
-permissions and Keychain entries survive updates.
-
-```bash
-git clone https://github.com/KINN-CH/FaceUnlock.git
-cd FaceUnlock
-make model      # download ArcFace + convert to CoreML (once, a few hundred MB)
-make install    # install into /Applications
+```sh
+git clone https://github.com/yuezjo/JoFaceGuard.git
+cd JoFaceGuard
+make model       # 下载固定版本 SFace，校验 SHA256，转换并核对数值
+make test        # 分类、计时、图像质量、对齐测试
+make model-test  # Swift 输入与原 ONNX 的数值对照
+make release     # 原生编译、签名、模型加载测试，生成 build/JoFaceGuard.zip
+make install     # 新安装到 /Applications；已有同名 App 时拒绝覆盖
+make run
 ```
 
-You'll need macOS 14 or later on Apple Silicon, Command Line Tools
-(`xcode-select --install`), and Python 3.11 or 3.12 for the conversion —
-coremltools doesn't support 3.13 yet.
+构建工具会在临时目录签名，再输出 ZIP，避免 iCloud Documents 自动附加的 FinderInfo 破坏签名。请将解压后的 App 放在「应用程序」，不要留在同步的 Documents 中运行。仅支持本地 ad-hoc 签名；当前没有 Developer ID 公证。下载到其他 Mac 后 Gatekeeper 可能要求系统设置中的明确允许。重新构建后 macOS 可能重新请求摄像头/钥匙串访问。
 
-## First-time setup
+有 Developer ID 时可运行 `make release CODESIGN_ID='Developer ID Application: …'`。这不包含公证步骤，也不是 App Store 构建。
 
-Open **Settings** from the face icon in the menu bar and work down the list.
+## 判断流程
 
-1. **Camera** permission — for recognition
-2. **Accessibility** permission — needed to type the password into the lock screen
-3. **Add a face** — nine poses. You don't press anything: follow the prompt,
-   hold still for a moment, and it captures on its own. Order doesn't matter, so
-   if you tilt your head up while it's asking for left, the up slot fills first.
-   Up to three people; nothing is saved until you've taken all nine and pressed
-   Done
-4. **Login password** — verified against the real one before it's stored
-5. Turn on **Unlock with face**
+`AVFoundation 原始 BGRA → Vision 人脸/关键点/采集质量 → 原始光照与模糊检查 → 五点 112×112 对齐 → Core ML SFace → 128 维单位向量 → 三档分类 → 连续计时 → macOS 锁屏请求`
 
-To try it, lock with `Ctrl`+`Cmd`+`Q`, **wait for the display to turn off**,
-then press a key to wake it — it opens within a few seconds. Showing your face
-right after locking deliberately does nothing; see [How it works](#how-it-works).
-Language follows the system by default; Korean and English can be picked in
-Settings.
+| 情况 | 行为 |
+| --- | --- |
+| 最佳 Jo 样本 cosine ≥ 0.50 | Jo，清零计时 |
+| 所有 Jo 样本 cosine ≤ 0.20，且质量合格 | Unknown，允许开始连续确认 |
+| 相似度在两者之间、没有有效资料、推理失败 | Uncertain，清零计时 |
+| 太暗、过曝、模糊、脸太小/被裁切、姿态太偏、缺少质量分数 | Uncertain，清零计时 |
+| 多人同框（包括 Jo + 陌生人） | Uncertain，清零计时 |
+| 正常画面没有人脸 | No face，清零计时 |
 
-Five settings are adjustable.
+这些阈值是保守起点，不是经 Jo 实测得到的概率或准确率。SFace 上游的普通人脸验证阈值不能直接证明本场景可靠。
 
-| Setting | Default | |
-|---|---|---|
-| Match strictness | 0.48 | Higher means strangers are less likely to get in, and so are you |
-| Blink check | On | Off means a printed photo opens it. Leave it on |
-| Recognition timeout | 20s | After that it gives up and hands over to the password field |
-| Camera | Automatic | Automatic prefers the built-in one. Pick your webcam if you run the lid closed |
-| Update check | On | Once a day; see [Before you turn it on](#before-you-turn-it-on) for what it sends |
+连续陌生人确认使用单调的采集时间，需要 ≥2 秒且至少 8 个有效样本。相邻有效帧间隔不得超过 0.5 秒，每帧处理结果不得迟于采集时间 0.5 秒。人脸框必须重叠，同一段中的特征还必须与上一帧及首帧保持一致，避免不同陌生人拼成两秒。任何中断清零；同一连续片段最多请求一次锁屏。
 
-The camera switches as soon as you pick it. If the webcam you picked isn't
-plugged in when the screen locks, it falls back to the built-in camera —
-unplugging a cable doesn't take face unlock down with it.
+## 本地数据与限制
 
-**It comes back on its own after a restart.** The app does nothing unless it is
-running, so the first time you turn **Face unlock** on it registers itself as a
-login item, once. After that the *Launch at login* toggle in Settings is in
-charge — if you turn it off, it stays off. Note that the **first login screen
-after a restart cannot be opened by face**: macOS has not launched the app yet,
-so type your password there. Every screen lock after that works.
+- 原始图像只在内存中短暂处理和预览，不保存照片、视频或人脸日志，不上传。15 个特征保存在 `io.github.yuezjo.JoFaceGuard` 的本机钥匙串项目中，关闭 iCloud 同步，设备限定、解锁时可访问。
+- 只有摄像头能清楚看到的脸才可能触发。遮挡、背对摄像头、暗光、多人或无法确定身份时，按设计保持不锁。它不替代系统自动锁定、密码或你离开前的手动锁屏。
+- 普通二维摄像头不等同 Face ID，没有深度/活体认证；照片或屏幕中的 Jo 可能被认作 Jo。这一版只做陌生脸守卫。
+- 需要持续使用摄像头，会亮摄像头指示灯，增加耗电；和视频会议软件争用时可能暂停或显示不确定。
+- 锁屏使用动态加载的私有 `SACLockScreenImmediate`，可能随 macOS 更新失效。不可用时禁止开启；请求后需要系统状态/通知确认，不会把函数调用当成已锁屏。失败时暂停并显示错误，可使用 **Control–Command–Q**。
+- 当前只自动选择内置摄像头，找不到时选第一个外置摄像头；暂时没有摄像头选择器。外置/连续互通摄像头方向和性能尚未实测。
+- **本次没有 Jo 的真实录入、陌生人测试、实际锁屏调用或长时间误锁率测试。** 自动测试证明逻辑与模型输入正确，不证明现场识别效果。详见 [验证记录](docs/VALIDATION.md)。
 
-## Uninstalling
+## 关键代码
 
-Press **Uninstall FaceUnlock** at the bottom of Settings. After one confirmation
-it removes the following, moves the app to the Trash, and quits.
-
-- Your enrolled faces (`~/Library/Application Support/FaceUnlock/faces.sealed`)
-- The sealed login password and the Secure Enclave key (Keychain)
-- The downloaded recognition model (`~/Library/Application Support/FaceUnlock/Models`)
-- Settings, caches, saved window state
-- The launch-at-login registration
-- `/Applications/FaceUnlock.app` — moved to the Trash, not erased
-
-Your actual macOS account password is left alone.
-
-**If you already dragged the app to the Trash**, that button is out of reach.
-macOS gives an app no chance to run when it is deleted, so the app disappears
-and everything above stays behind. Clean up with the script from the repository.
-
-```bash
-git clone https://github.com/KINN-CH/FaceUnlock.git
-./FaceUnlock/scripts/uninstall.command
-```
-
-Or by hand.
-
-```bash
-rm -rf ~/Library/Application\ Support/FaceUnlock
-rm -rf ~/Library/Caches/io.github.kinnch.FaceUnlock ~/Library/Caches/FaceUnlock
-rm -f  ~/Library/Preferences/io.github.kinnch.FaceUnlock.plist
-rm -rf ~/Library/Saved\ Application\ State/io.github.kinnch.FaceUnlock.savedState
-security delete-generic-password -s io.github.kinnch.FaceUnlock   # repeat per item
-```
-
-Either way, FaceUnlock may linger in **System Settings → Privacy & Security →
-Accessibility**. With the app gone it is a dead entry that does nothing, but you
-can remove it there with `−`.
-
-## How it works
-
-```
-display wakes, or the lock screen reappears, while locked
-  (screensDidWake · didWake · screenLockUIIsShown)
-  → recognition window opens — camera starts (only while the window is open)
-  → Vision face detection + 5-point landmarks (20fps)
-  → quality gate (size · edge margin · sharpness)
-  → similarity transform to 112×112 + exposure normalization + CLAHE
-  → ArcFace CoreML → 512-d embedding (10/s max)
-  → cosine similarity against enrolled faces, 3 consecutive frames required
-  → blink check → re-verify identity right after the blink
-  → re-check the lock state → inject password → Return
-```
-
-A few decisions here were deliberate.
-
-**The lock state is re-checked immediately before injection.** This is the most
-important line in the app. Injecting into a screen that's already unlocked types
-your password in plain sight, into whatever document or terminal was open. If
-the state can't be read, it's treated as *not locked* and nothing is typed.
-Failing is the safe direction.
-
-**One frame is never enough.** Three consecutive frames have to match, and the
-counter resets to zero the moment the face leaves the view — that's what stops
-someone being swapped in after a match. For the same reason the embedding is
-verified once more right after a blink is detected, since the face could change
-while the eyes are shut.
-
-**The camera only runs when an unlock is actually possible.** The one moment
-this app has work to do is *the lock screen coming back in front of you* — the
-display waking while locked, or the screen saver being dismissed to reveal the
-password field (the display never slept in that case, so it's a separate
-event). So the trigger is the event — "did the display wake?", "did the lock
-screen appear?" — not the state, "is a display awake?". The event opens a
-recognition window; success, failure, the timeout, or the display sleeping
-closes it. **Outside that window no camera and
-no timer runs at all.** Nothing is lost by sitting idle: when the display sleeps
-the camera sleeps with it and stops delivering frames anyway.
-
-Detection and blink tracking run at 20fps so short blinks aren't missed; only
-the expensive embedding is capped at 10 per second. That embedding runs on the
-CPU rather than the Neural Engine. Per frame the Neural Engine is 4× faster, but
-that's a 6.6ms difference nobody can feel — while loading the model cold is
-1.67s against 0.16s, and with an event-driven window the Neural Engine is almost
-always cold. The part you actually wait for is the part it loses.
-
-**Locking the screen yourself doesn't unlock it a second later.** Reaching for
-the lock button means you had a reason. But if recognition starts the instant it
-locks, then with the blink check turned off simply continuing to look at the
-screen reopens it about a second later. So the lock itself doesn't open a
-window. macOS turns the display off a few seconds later, and the window opens
-when you come back and press a key or touch the trackpad.
-
-**A rejected password stops everything.** If the lock screen refuses the stored
-password — after you change it in macOS, say — automatic unlocking is disabled
-and you're prompted to re-enroll it. Repeatedly pushing a wrong password makes
-macOS start adding delays.
-
-## The things that fail quietly
-
-A build that compiles isn't a build that's correct. There are a few places in
-this code that can be wrong without raising an error, so each has a check.
-
-| Check | What it catches | Run |
-|---|---|---|
-| Lock guard | Treating an unlocked screen as locked and **typing the password in plain sight** | `--selftest` |
-| Transform residual | A mistake in the 5-point alignment math | `--selftest` |
-| Render orientation | CoreImage (bottom-left origin) ↔ bitmap (top-left origin) flip | `--selftest` |
-| Preprocessing cross-check | RGB/BGR swap, NCHW/NHWC mix-up, wrong normalization constants | `make xcheck` |
-| Conversion gate | Dropped layers, a bad transpose, quantization loss | `make model` |
-
-The last three matter most. CoreML happily returns a 512-d vector even when the
-channel order is wrong, and the only symptom is "it finds faces but never
-matches anyone" — which takes a long time to trace back.
-
-Current numbers: preprocessing cross-check `cos = 0.9987` (2.92° off), model
-conversion `cos = 1.000000` in FP32 and `0.9976` (3.95°) in FP16. The match
-threshold of 0.48 is about 61° in angle, so that much drift is irrelevant.
-
-## Known problems
-
-**The camera indicator light stays on while the screen is locked.** When the
-camera is opened for the *first* time inside a locked session, macOS returns
-all-black frames and reports no error — they arrive at a healthy 15 fps with
-every pixel at zero, indistinguishable from a working stream. So the app opens
-the camera the moment the screen locks and holds it across the lock: the device
-has to already be streaming for real frames to arrive, and stopping and
-restarting it after the lock does not help. Turning face unlock off keeps it
-closed.
-
-**The first launch of a new build stalls for about 30 seconds.** A Keychain
-prompt appears; choose "Always Allow" and it's instant from then on. The access
-list on a Keychain item is recorded by the app's cdhash, so every changed build
-gets asked once. There's no way around it without a Team ID.
-
-**Ad-hoc signing invalidates Accessibility permission on every rebuild.** The
-designated requirement of an ad-hoc signature is the binary hash itself
-(`cdhash H"b5e93fc5e2..."`). Change one line and the hash changes and the
-permission is void — while the checkbox in System Settings stays checked, which
-makes it worse. Only `AXIsProcessTrusted()` quietly returns `false`.
-
-Running this once fixes it.
-
-```bash
-./scripts/make_signing_cert.sh
-```
-
-It creates a self-signed code-signing certificate, which switches the
-requirement to an identity-based one. As long as the certificate stays put,
-permissions survive any number of rebuilds. Free, no Apple Developer Program
-needed. `make` finds and uses the certificate automatically, and warns when it
-falls back to ad-hoc. If the permission is already void, remove FaceUnlock from
-System Settings → Accessibility with `−` and add it again — unchecking and
-rechecking doesn't refresh the stale entry.
-
-Beyond that: the built-in camera is preferred over external webcams, and
-recognition fails in a very dark room. Screen glow is usually enough; if it
-isn't, type the password.
-
-## Development
-
-```bash
-make debug        # build + sign
-make run          # build and launch
-make log          # log stream (passwords and embeddings are never logged)
-make aligntest && ./build/aligntest --selftest    # safety guard · alignment · orientation
-make xcheck       # Swift preprocessing ↔ original ONNX cross-check
-./build/aligntest a.jpg b.jpg                     # compare two photos
-make release      # optimized build
-make dmg          # distributable DMG
-```
-
-`--selftest` runs without any photos. A single vertical flip between CoreImage
-and the bitmap silently ruins every embedding without raising an error, so this
-exists to catch it automatically.
-
-## Model
-
-Face embeddings come from InsightFace's ArcFace (`buffalo_l` / `w600k_r50`).
-The non-commercial research license keeps it out of the repo and out of
-releases, so it's downloaded from the
-[official InsightFace release](https://github.com/deepinsight/insightface/releases/tag/v0.7)
-and converted to CoreML locally.
-
-That restriction follows you, not just the repo. Personal use is fine, but a
-company-issued machine or anything work-related may fall outside "non-commercial
-research purposes" — check the license first if that's you.
-
-The conversion script only passes when PyTorch and CoreML outputs agree to a
-cosine similarity of 0.999 or better — drift here makes the whole pipeline
-meaningless.
+- `Sources/JoFaceGuard/FacePipeline.swift`：显式 Vision 采集质量请求、光线/清晰度/姿态门限。
+- `Sources/FaceUnlock/Core/FaceAligner.swift`、`FaceGeometry.swift`：保留自上游的五点对齐和像素方向。
+- `Sources/JoFaceGuard/EmbeddingModel.swift`：SFace **raw RGB 0…255** 输入；不套用 ArcFace 的归一化。
+- `Sources/JoFaceGuard/GuardPolicy.swift`：Jo / Unknown / Uncertain 与两秒连续性规则。
+- `Sources/JoFaceGuard/GuardController.swift`：录入、观察、守卫、暂停、休眠与异步结果失效。
+- `Sources/JoFaceGuard/ScreenLocker.swift`：只请求锁屏，不解锁。
+- `Sources/JoFaceGuard/ProfileStore.swift`：本机钥匙串；完整录入后才替换。
 
 ## License
 
-[MIT](LICENSE). The model weights are separate and follow InsightFace's license.
+App：MIT，保留 © 2026 Cheolho Kim 的原始版权与许可文本。修改说明见本 README 与 `docs/UPSTREAM.md`。
 
-The unlock mechanism follows the approach used by
-[Sapphire](https://github.com/cshariq/Sapphire)'s Face ID feature. No code was
-taken; it's a clean reimplementation.
-
----
-
-<div align="center">
-
-<a id="한국어"></a>
-
-### 한국어
-
-<sub>The English documentation is <a href="#english">above</a>.</sub>
-
-</div>
-
-<p align="center">
-  <a href="#시작하기-전에">시작하기 전에</a> ·
-  <a href="#설치">설치</a> ·
-  <a href="#처음-설정">처음 설정</a> ·
-  <a href="#지우기">지우기</a> ·
-  <a href="#동작-방식">동작 방식</a> ·
-  <a href="#조용히-틀리는-것들">조용히 틀리는 것들</a> ·
-  <a href="#알려진-문제">알려진 문제</a> ·
-  <a href="#개발">개발</a> ·
-  <a href="#모델">모델</a> ·
-  <a href="#라이선스">라이선스</a>
-</p>
-
-## 시작하기 전에
-
-이름은 비슷하지만 Apple의 Face ID와는 다릅니다. 편의 도구로 만든 것이고
-보안 장치로 쓸 물건은 아닙니다. 켜기 전에 네 가지는 알고 계셔야 합니다.
-
-**사진은 막지만 영상은 못 막습니다.** 내장 카메라는 깊이를 재지 못합니다.
-Face ID가 적외선 점 3만 개로 얼굴의 입체를 읽는 것과 달리, 이 앱이 보는 건
-평면 이미지 한 장입니다. 눈 깜빡임을 확인하기 때문에 인쇄된 사진으로는 열리지
-않지만, 당신이 눈을 깜빡이는 영상을 휴대폰으로 재생하면 열립니다. 깊이 센서
-없이 해결할 수 있는 문제가 아니라서 고칠 계획도 없습니다.
-
-**로그인 비밀번호를 기기에 보관합니다.** macOS에는 서드파티 앱이 화면 잠금을
-푸는 공개 API가 없습니다. 그래서 저장해 둔 비밀번호를 잠금 화면에 대신
-타이핑하는 방식을 씁니다. 복호화할 수 있는 형태로 갖고 있어야 한다는 뜻입니다.
-할 수 있는 보호는 걸어두었습니다. 대칭키는 Secure Enclave 안에서만 유도하고
-(P-256 ECDH → AES-GCM), Keychain에는 암호문만 들어가며, 다른 Mac으로 옮기면
-열리지 않습니다. 평문은 `String`이 아니라 `[UInt16]`으로만 다루고 쓴 직후
-0으로 덮습니다. 그래도 이 Mac을 손에 넣고 로그인까지 한 상대에게는 소용이
-없습니다. 잠금 화면에서 꺼내 써야 하니 생체나 암호 확인을 걸 수가 없거든요.
-
-**FileVault 부팅 화면에서는 동작하지 않습니다.** 전원을 켜고 처음 뜨는 그
-화면은 macOS가 아직 올라오기 전이라 앱이 돌 수 없습니다. 로그인한 뒤의 화면
-잠금에서만 동작합니다.
-
-**설치해도 꺼져 있습니다.** 설정에서 직접 켜야 시작합니다.
-
-**밖으로 나가는 것은 새 버전 확인 하나뿐입니다.** 하루에 한 번 GitHub 릴리스
-페이지에 인증 없는 요청을 하나 보내 최신 버전 번호만 읽어옵니다. 얼굴도,
-비밀번호도, 사용 기록도, 기기 식별자도 보내지 않습니다 — GitHub 서버가 알 수
-있는 것은 접속 IP뿐입니다. 이 확인을 넣은 이유는 v0.1.0~0.1.4에 잠금 화면에서
-카메라가 검은 화면만 주는 결함이 있었는데 *그 버전을 쓰는 사람에게 알릴 방법이
-없었기* 때문입니다. 설정 → 업데이트에서 끌 수 있고, 끄면 요청 자체가 나가지
-않습니다. 내려받기와 설치는 언제나 직접 하십니다.
-
-아무런 보증 없이 제공됩니다. 자세한 건 [LICENSE](LICENSE)를 보세요.
-
-## 설치
-
-### DMG로 설치하기
-
-**[▶︎ 설치 가이드 영상 보기](https://youtu.be/3cr4gCYPvxY)** — 글로 읽는 것보다 따라 하는 게
-편하시면 이 영상 하나로 처음부터 끝까지 됩니다.
-
-[릴리스](https://github.com/KINN-CH/FaceUnlock/releases)에서 `FaceUnlock.dmg`를
-받아 엽니다. 창 안내대로 앱을 `Applications`로 드래그한 다음,
-`설치 도우미 (Install Helper).command`를 우클릭해서 열면 나머지는 알아서
-진행됩니다.
-
-문제는 그 "열기"가 한 번에 되지 않는다는 겁니다. 공증(notarization)을 받지
-않아서 macOS가 막고, 승인 절차를 **두 번** 밟아야 실제로 실행됩니다.
-
-1. 설치 도우미 우클릭 → **열기** (차단됩니다)
-2. 시스템 설정 → 개인정보 보호 및 보안 → 아래로 스크롤 → **그래도 열기** → 암호 입력
-3. **1~2번을 한 번 더 반복합니다.** 두 번째에 실행됩니다.
-
-두 번 해야 하는 게 정상입니다. 한 번에 열렸다면 그대로 진행하세요.
-터미널 창이 뜨면 다 끝난 겁니다. 이후로는 앱 복사, quarantine 해제, 얼굴 인식
-모델 내려받기와 변환까지 한 번에 진행됩니다. 모델 변환에 몇 분 걸리고,
-Python 3.12가 없으면 Homebrew로 설치할지 물어봅니다.
-
-모델을 따로 받는 건 라이선스 때문입니다. ArcFace 가중치가 InsightFace의 비상업
-연구용 라이선스라 저장소에도 DMG에도 넣을 수 없어서, 설치 도우미가 공식
-배포처에서 직접 받아 `~/Library/Application Support/FaceUnlock/Models/`에
-넣습니다.
-
-> 모르는 사람이 만든, 서명도 없는 앱에 이렇게까지 하는 건 원래 위험한
-> 일입니다. 못 믿겠으면 소스에서 빌드하세요. 저장소를 공개해 둔 이유가
-> 그것입니다.
-
-### 소스에서 빌드하기
-
-이쪽이 더 깔끔합니다. quarantine이 붙지 않고 서명도 안정적이라 업데이트해도
-권한과 Keychain 항목이 유지됩니다.
-
-```bash
-git clone https://github.com/KINN-CH/FaceUnlock.git
-cd FaceUnlock
-make model      # ArcFace 내려받기 + CoreML 변환 (최초 1회, 수백 MB)
-make install    # /Applications 에 설치
-```
-
-macOS 14 이상 Apple Silicon, Command Line Tools(`xcode-select --install`),
-그리고 모델 변환용 Python 3.11이나 3.12가 필요합니다. coremltools가 3.13을
-아직 지원하지 않아서 최신 버전으로는 변환이 안 됩니다.
-
-## 처음 설정
-
-메뉴바의 얼굴 아이콘에서 **설정**을 열고 위에서부터 차례로 하면 됩니다.
-
-1. **카메라** 권한 — 얼굴 인식용
-2. **손쉬운 사용** 권한 — 잠금 화면에 비밀번호를 입력하려면 필요합니다
-3. **얼굴 추가** — 9가지 자세를 찍습니다. 버튼을 누를 필요는 없고, 안내대로
-   고개를 돌리고 잠깐 멈추면 자동으로 찍힙니다. 순서도 상관없어서 왼쪽을
-   안내하는 중에 고개를 들면 위쪽 칸이 먼저 채워집니다. 최대 3명까지 등록할 수
-   있고, 9장을 다 찍고 완료를 눌러야 저장됩니다
-4. **로그인 비밀번호** — 저장하기 전에 실제 비밀번호가 맞는지 확인합니다
-5. **얼굴로 잠금 해제** 켜기
-
-잘 되는지 보려면 `Ctrl`+`Cmd`+`Q`로 잠그고 **화면이 꺼질 때까지 기다렸다가**
-키를 눌러 깨워보세요. 몇 초 안에 열립니다. 잠근 직후에 얼굴을 들이대도 열리지
-않는 건 의도한 동작입니다 — [동작 방식](#동작-방식)을 보세요.
-언어는 설정에서 시스템 따름(기본) / 한국어 / English 중에 고를 수 있습니다.
-
-바꿀 수 있는 값은 다섯입니다.
-
-| 항목 | 기본값 | |
-|---|---|---|
-| 인식 엄격도 | 0.48 | 높이면 타인이 열 확률은 줄지만 본인도 자주 실패합니다 |
-| 눈 깜빡임 확인 | 켜짐 | 끄면 인쇄된 사진으로도 열립니다. 켜두세요 |
-| 인식 제한 시간 | 20초 | 지나면 포기하고 비밀번호 입력으로 넘어갑니다 |
-| 카메라 | 자동 | 자동은 내장을 먼저 씁니다. 맥북을 덮고 외장 모니터로 쓴다면 웹캠을 직접 고르세요 |
-| 새 버전 확인 | 켜짐 | 하루 한 번. 무엇이 오가는지는 [시작하기 전에](#시작하기-전에) |
-
-카메라는 고르는 즉시 바뀝니다. 고른 웹캠이 잠글 때 꽂혀 있지 않으면 내장
-카메라로 되돌아갑니다 — 케이블을 뽑아놨다고 얼굴 해제가 통째로 죽지는 않습니다.
-
-**재시동해도 알아서 다시 뜹니다.** 이 앱은 떠 있지 않으면 아무 일도 하지
-않으므로, **얼굴로 잠금 해제**를 처음 켤 때 로그인 항목으로 한 번 등록합니다.
-그 뒤로는 설정창의 *로그인 시 자동 실행* 토글이 주인입니다 — 껐다면 다시
-켜지 않습니다. 다만 재시동 직후 **첫 로그인 화면은 얼굴로 못 엽니다.** 그때는
-macOS가 아직 앱을 띄우기 전이라 비밀번호를 직접 입력해야 하고, 그 뒤의 화면
-잠금부터 얼굴이 동작합니다.
-
-## 지우기
-
-설정 창 맨 아래 **FaceUnlock 완전 삭제**를 누르면 됩니다. 확인 창 한 번을 거쳐
-아래 것들을 지우고, 앱을 휴지통으로 옮긴 뒤 종료합니다.
-
-- 등록한 얼굴 (`~/Library/Application Support/FaceUnlock/faces.sealed`)
-- 봉인된 로그인 비밀번호와 Secure Enclave 키 (키체인)
-- 내려받은 얼굴 인식 모델 (`~/Library/Application Support/FaceUnlock/Models`)
-- 설정값·캐시·저장된 창 상태
-- 로그인 시 자동 실행 등록
-- `/Applications/FaceUnlock.app` — 지우지 않고 휴지통으로 보냅니다
-
-macOS 계정 비밀번호 자체는 건드리지 않습니다.
-
-**앱을 이미 휴지통에 넣으셨다면** 이 버튼을 누를 수가 없습니다. macOS에는 앱을
-지울 때 그 앱의 코드를 실행해 주는 장치가 없어서, 앱만 사라지고 위의 것들은
-그대로 남습니다. 저장소의 스크립트로 정리하세요.
-
-```bash
-git clone https://github.com/KINN-CH/FaceUnlock.git
-./FaceUnlock/scripts/uninstall.command
-```
-
-직접 지우셔도 됩니다.
-
-```bash
-rm -rf ~/Library/Application\ Support/FaceUnlock
-rm -rf ~/Library/Caches/io.github.kinnch.FaceUnlock ~/Library/Caches/FaceUnlock
-rm -f  ~/Library/Preferences/io.github.kinnch.FaceUnlock.plist
-rm -rf ~/Library/Saved\ Application\ State/io.github.kinnch.FaceUnlock.savedState
-security delete-generic-password -s io.github.kinnch.FaceUnlock   # 항목 수만큼 반복
-```
-
-어느 쪽으로 지우든 **시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용**
-목록에는 FaceUnlock이 남을 수 있습니다. 앱이 없으면 아무 일도 하지 않는
-빈 줄이지만, 거슬리면 `−`로 지우세요.
-
-## 동작 방식
-
-```
-잠긴 채로 화면이 켜지거나 잠금 화면이 다시 뜸
-  (screensDidWake · didWake · screenLockUIIsShown)
-  → 인식 창 열림 — 카메라 시작 (창이 열려 있는 동안에만)
-  → Vision 얼굴 검출 + 5점 랜드마크 (20fps)
-  → 품질 게이트 (크기 · 가장자리 · 선명도)
-  → 유사변환으로 112×112 정렬 + 노출 정규화 + CLAHE
-  → ArcFace CoreML → 512차원 임베딩 (초당 최대 10회)
-  → 등록된 얼굴과 코사인 유사도, 연속 3프레임 일치 요구
-  → 눈 깜빡임 확인 → 깜빡임 직후 신원 재확인
-  → 잠금 상태 재확인 → 비밀번호 주입 → Return
-```
-
-몇 가지는 일부러 그렇게 했습니다.
-
-**주입 직전에 잠금 상태를 다시 확인합니다.** 이 앱에서 가장 중요한 부분입니다.
-이미 풀린 화면에 주입하면 비밀번호가 눈앞에 그대로 타이핑되고, 열려 있던
-문서나 터미널에 들어갑니다. 상태를 확인할 수 없으면 "잠기지 않음"으로 보고
-주입하지 않습니다. 실패하는 쪽이 안전합니다.
-
-**한 프레임으로는 열리지 않습니다.** 연속 3프레임이 일치해야 하고, 얼굴이
-시야에서 사라지면 카운트를 0으로 되돌립니다. 인식된 다음 다른 사람으로
-바꿔치는 걸 막기 위해서입니다. 같은 이유로 깜빡임이 감지된 직후에 임베딩을 한
-번 더 확인합니다. 눈을 감고 있는 사이에 얼굴이 바뀔 수 있으니까요.
-
-**카메라는 잠금을 풀 만한 순간에만 켜집니다.** 이 앱이 일해야 하는 때는
-*잠금 화면이 눈앞에 다시 나타나는 그 순간*뿐입니다 — 잠긴 채로 화면이
-켜지거나, 화면보호기를 걷어내 비밀번호 칸이 뜨거나(이때는 화면이 꺼진 적이
-없어 별도의 사건입니다). 그래서 "잠겨 있고 화면이 켜져 **있는가**"라는 상태가
-아니라 "화면이 켜**졌는가**", "잠금 화면이 떴**는가**"라는 사건으로
-판단합니다. 사건이 오면 인식 창을 열고, 성공·실패·제한 시간·화면 꺼짐 중
-하나가 오면 닫습니다. **창 밖에서는 카메라도 타이머도 돌지 않습니다.** 화면이 자면 카메라도
-같이 자서 프레임이 아예 오지 않으니, 그동안 아무것도 안 돌려도 잃는 게 없습니다.
-
-검출과 깜빡임 감지는 20fps로 돌려 짧은 깜빡임을 놓치지 않고, 무거운 임베딩만
-초당 10회로 제한합니다. 임베딩은 뉴럴 엔진이 아니라 CPU에서 돌립니다. 프레임당
-속도는 뉴럴 엔진이 4배 빠르지만 차이가 6.6ms라 체감되지 않는 반면, 모델을 처음
-올리는 시간은 1.67초 대 0.16초로 뒤집힙니다. 사건 기반이라 뉴럴 엔진은 거의
-항상 차갑기 때문에, 정작 기다리게 되는 쪽이 느려집니다.
-
-**직접 잠그면 곧바로 풀리지 않습니다.** 잠금 버튼을 눌렀다는 건 이유가 있어서
-잠갔다는 뜻입니다. 그런데 잠기자마자 인식을 시작하면, 깜빡임 확인을 끈 경우
-화면을 계속 보고 있는 것만으로 1초 뒤에 도로 풀립니다. 그래서 잠금 자체로는
-창을 열지 않습니다. macOS가 5초쯤 뒤 화면을 끄고, 다시 쓰려고 키를 누르거나
-트랙패드를 만지면 그때 창이 열립니다.
-
-**비밀번호가 거부되면 멈춥니다.** macOS 비밀번호를 바꾼 경우처럼 잠금 화면이
-저장된 비밀번호를 거부하면 자동 해제를 중단하고 재등록을 안내합니다. 틀린
-비밀번호를 계속 밀어 넣으면 macOS가 입력 지연을 겁니다.
-
-## 조용히 틀리는 것들
-
-빌드가 통과한다고 동작이 맞는 건 아닙니다. 이 코드에는 에러 없이 조용히 틀릴
-수 있는 자리가 몇 군데 있어서, 그때마다 검사를 걸어두었습니다.
-
-| 검사 | 무엇이 틀리면 잡히나 | 실행 |
-|---|---|---|
-| 잠금 가드 | 풀린 화면을 잠김으로 보고 **비밀번호를 눈앞에 타이핑** | `--selftest` |
-| 유사변환 잔차 | 5점 정렬 수식 오류 | `--selftest` |
-| 렌더 상하 방향 | CoreImage(좌하단 원점) ↔ 비트맵(좌상단 원점) 뒤집힘 | `--selftest` |
-| 전처리 교차 검증 | RGB/BGR 뒤바뀜, NCHW/NHWC 착각, 정규화 상수 오류 | `make xcheck` |
-| 모델 변환 게이트 | 레이어 누락, transpose 실수, 양자화 손실 | `make model` |
-
-아래 셋이 특히 그렇습니다. CoreML은 채널 순서를 바꿔 넣어도 군말 없이 512차원
-벡터를 돌려주고, 증상은 "얼굴은 잡히는데 절대 일치하지 않는다"로만 나타납니다.
-원인을 찾는 데 한참 걸립니다.
-
-현재 측정값은 전처리 교차 검증 `cos = 0.9987`(편차 2.92°), 모델 변환 FP32
-`cos = 1.000000`, FP16 `cos = 0.9976`(3.95°)입니다. 판정 임계 0.48이 각도로
-약 61°라 이 정도 편차는 무시할 수준입니다.
-
-## 알려진 문제
-
-**잠긴 직후 카메라 표시등이 몇 초 켜졌다 꺼집니다.** macOS 는 잠긴 상태에서
-카메라를 *처음* 여는 경우 오류 없이 새까만 프레임만 돌려줍니다. 프레임은 초당
-15장씩 멀쩡히 오고 내용만 전부 0이라, 앱 입장에서는 정상 스트림과 구분되지
-않습니다. 장치를 통째로 다시 열어도, 포맷을 바꿔도 같습니다.
-
-해결책은 **예열**입니다. 잠기는 순간 카메라를 몇 초 돌려두면, 같은 잠금 세션
-안에서는 껐다 켜도 정상 영상이 나옵니다. 그래서 화면이 꺼질 때 카메라를 놓고,
-화면이 켜질 때 다시 열어 인식합니다 — 화면이 꺼져 있는 동안 카메라는 꺼져
-있고, 맥도 평소대로 절전에 들어갑니다(돌아가는 캡처 세션은 시스템 유휴
-절전을 막습니다). 얼굴 잠금 해제를 끄면 예열도 하지 않습니다.
-
-**새 버전을 처음 실행하면 30초쯤 멈춥니다.** 키체인 확인 창이 뜨는데, 여기서
-'항상 허용'을 누르면 그 뒤로는 즉시 뜹니다. 키체인 항목의 접근 허용 목록이
-앱의 cdhash로 적히기 때문에 빌드가 바뀔 때마다 한 번씩 다시 물어봅니다. Team
-ID 없이는 우회할 방법이 없습니다.
-
-**ad-hoc 서명은 다시 빌드할 때마다 손쉬운 사용 권한이 무효가 됩니다.** ad-hoc
-서명의 지정 요구사항은 바이너리 해시 그 자체(`cdhash H"b5e93fc5e2..."`)입니다.
-코드를 한 줄만 고쳐도 해시가 바뀌어 권한이 무효가 되는데, 시스템 설정 목록에는
-체크된 채로 남아 있어서 더 헷갈립니다. `AXIsProcessTrusted()`만 조용히 `false`를
-돌려줍니다.
-
-한 번만 실행하면 해결됩니다.
-
-```bash
-./scripts/make_signing_cert.sh
-```
-
-코드서명용 자체 서명 인증서를 만들어 요구사항을 신원 기반으로 바꿉니다.
-인증서가 그대로인 한 몇 번을 다시 빌드해도 권한이 유지됩니다. Apple Developer
-Program 없이 무료입니다. `make`가 이 인증서를 자동으로 찾아 쓰고, 없으면
-ad-hoc으로 서명하면서 경고합니다. 이미 무효가 된 뒤라면 시스템 설정 → 손쉬운
-사용에서 FaceUnlock을 `−`로 지우고 다시 추가해야 합니다. 체크만 껐다 켜는
-걸로는 낡은 항목이 갱신되지 않습니다.
-
-그 밖에 외장 웹캠보다 내장 카메라를 우선하고, 아주 어두운 방에서는 인식이
-실패합니다. 화면 불빛만으로도 대체로 되지만 안 되면 비밀번호로 로그인하면
-됩니다.
-
-## 개발
-
-```bash
-make debug        # 빌드 + 서명
-make run          # 빌드 후 실행
-make log          # 로그 스트림 (비밀번호와 임베딩은 절대 찍지 않습니다)
-make aligntest && ./build/aligntest --selftest    # 안전 가드 · 정렬 기하 · 상하 방향
-make xcheck       # Swift 전처리 ↔ 원본 ONNX 교차 검증
-./build/aligntest a.jpg b.jpg                     # 두 사진의 유사도 비교
-make release      # 최적화 빌드
-make dmg          # 배포용 DMG
-```
-
-`--selftest`는 사진 없이 돌아갑니다. CoreImage와 비트맵 사이에서 상하가 한 번
-뒤집히면 임베딩이 조용히 망가지는데 에러는 나지 않아서, 그걸 자동으로 잡으려고
-만들었습니다.
-
-## 모델
-
-얼굴 임베딩은 InsightFace의 ArcFace(`buffalo_l` / `w600k_r50`)를 씁니다.
-비상업 연구용 라이선스라 저장소와 배포물에는 넣지 않고,
-[InsightFace 공식 릴리스](https://github.com/deepinsight/insightface/releases/tag/v0.7)에서
-직접 받아 CoreML로 변환합니다.
-
-이 제한은 쓰는 사람에게도 그대로 적용됩니다. 개인적으로 쓰는 건 문제없지만,
-회사에서 지급한 기기나 업무 목적의 사용은 '비상업 연구용' 범위를 벗어날 수
-있습니다. 그런 경우라면 먼저 라이선스를 확인해 보세요.
-
-변환 스크립트는 PyTorch 출력과 CoreML 출력의 코사인 유사도가 0.999 이상일
-때만 통과시킵니다. 여기서 어긋나면 인식이 통째로 무의미해집니다.
-
-## 라이선스
-
-[MIT](LICENSE). 모델 가중치는 별개이며 InsightFace의 라이선스를 따릅니다.
-
-잠금 해제 메커니즘은 [Sapphire](https://github.com/cshariq/Sapphire)의 Face ID
-기능에서 동작 원리를 참고했습니다. 코드는 가져오지 않고 직접 구현했습니다.
-
----
-
----
-
-## 상표 · Trademarks
-
-Apple, Mac, MacBook, Face ID, Touch ID는 Apple Inc.의 상표입니다.
-이 프로젝트는 Apple Inc.와 아무런 제휴·후원·보증 관계가 없습니다.
-
-Apple, Mac, MacBook, Face ID and Touch ID are trademarks of Apple Inc.
-This project is not affiliated with, sponsored by, or endorsed by Apple Inc.
+SFace 模型：Apache 2.0；完整许可为 `Resources/SFACE_LICENSE.txt`。模型从 ONNX 转为 Core ML 的修改和 attribution 保存在 `docs/UPSTREAM.md`，并一同打包到 App。源码仓库不上传权重，构建工具从固定上游版本下载。构建后的安装包含模型和两份许可。

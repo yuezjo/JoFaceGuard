@@ -1,0 +1,10 @@
+# Build-time conversion only; JoFaceGuard runs without Python.
+# Tested on macOS Apple Silicon with Python 3.9.6.
+torch==2.2.2
+torchvision==0.17.2
+numpy==1.26.4
+onnx==1.16.2
+onnxruntime==1.19.2
+onnx2torch==1.5.15
+coremltools==8.3.0
+pillow==11.0.0
