@@ -76,6 +76,48 @@ enum PolicyTests {
             .classify(embedding: [1, 0], enrollment: [[1, 0]]) == .jo,
                "explicit alternate dimensions are supported")
 
+        expect(classifier.evaluate(embedding: vector(), enrollment: []) ==
+            FaceMatchResult(classification: .uncertain, similarity: nil, issue: .missingProfile),
+               "diagnostics identify a missing profile without presenting a similarity")
+        expect(classifier.evaluate(embedding: vector(), enrollment: Array(enrollment.prefix(14))) ==
+            FaceMatchResult(classification: .uncertain, similarity: nil, issue: .invalidProfile),
+               "diagnostics identify an incomplete profile")
+        expect(classifier.evaluate(embedding: nil, enrollment: enrollment) ==
+            FaceMatchResult(classification: .uncertain, similarity: nil, issue: .invalidEmbedding),
+               "failed inference remains distinct from a missing profile")
+        for (index, invalid) in invalidVectors.enumerated() {
+            expect(classifier.evaluate(embedding: invalid, enrollment: enrollment) ==
+                FaceMatchResult(classification: .uncertain, similarity: nil, issue: .invalidEmbedding),
+                   "diagnostics identify invalid probe \(index) without a score")
+            expect(classifier.evaluate(embedding: vector(), enrollment: enrollment + [invalid]) ==
+                FaceMatchResult(classification: .uncertain, similarity: nil, issue: .invalidProfile),
+                   "diagnostics identify invalid profile sample \(index) without a score")
+        }
+        for invalidClassifier in [FaceClassifier(joThreshold: 0.1, unknownThreshold: 0.2),
+                                  FaceClassifier(joThreshold: .nan),
+                                  FaceClassifier(expectedEmbeddingDimension: 0),
+                                  FaceClassifier(minimumEnrollmentSamples: 0)] {
+            expect(invalidClassifier.evaluate(embedding: vector(), enrollment: enrollment) ==
+                FaceMatchResult(classification: .uncertain, similarity: nil, issue: .invalidConfiguration),
+                   "diagnostics identify invalid configuration without classification")
+        }
+        let ambiguous = classifier.evaluate(embedding: vector(0.30), enrollment: enrollment)
+        expect(ambiguous.classification == .uncertain && ambiguous.issue == .ambiguous,
+               "a valid intermediate score is identified as ambiguity")
+        expect(ambiguous.similarity.map { abs($0 - 0.30) < 0.0001 } == true,
+               "ambiguity diagnostics retain the actual cosine similarity")
+        let matching = classifier.evaluate(embedding: vector(), enrollment: enrollment)
+        expect(matching == FaceMatchResult(classification: .jo, similarity: 1, issue: .none),
+               "Jo diagnostics include the actual similarity and no error")
+        let unknown = classifier.evaluate(embedding: vector(0), enrollment: enrollment)
+        expect(unknown == FaceMatchResult(classification: .unknown, similarity: 0, issue: .none),
+               "unknown diagnostics include the actual similarity and no error")
+        for score: Float in [-1, 0, 0.20, 0.21, 0.30, 0.49, 0.50, 1] {
+            expect(classifier.classify(embedding: vector(score), enrollment: enrollment) ==
+                classifier.evaluate(embedding: vector(score), enrollment: enrollment).classification,
+                   "classification wrapper matches evaluation at similarity \(score)")
+        }
+
         var policy = GuardPolicy()
         let decisions = feed(&policy)
         expect(decisions.dropLast().allSatisfy { !$0.shouldLock }, "no lock before two seconds")

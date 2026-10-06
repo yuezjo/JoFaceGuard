@@ -1,0 +1,24 @@
+Fixture: armstrong.jpg
+Subject: NASA astronaut Neil A. Armstrong; official Apollo 11 portrait
+Creator/source credit: NASA; Photo ID S69-31741, 1969
+Rights: Public domain in the United States as a NASA-created U.S. government work.
+
+Downloaded unchanged from NASA's own image endpoint:
+https://www.nasa.gov/wp-content/uploads/2023/03/464436main_S69-31741_full.jpg
+
+NASA source page identifies the portrait and credits NASA:
+https://www.nasa.gov/image-article/official-portrait-of-neil-armstrong/
+
+The image-specific Commons record confirms S69-31741 and PD-USGov-NASA status:
+https://commons.wikimedia.org/wiki/File:Neil_Armstrong_pose.jpg
+
+NASA media guidelines distinguish copyright from logo/publicity restrictions:
+https://www.nasa.gov/nasa-brand-center/images-and-media/
+
+SHA-256 of this unchanged downloaded fixture:
+1cb000ea1005dc2b63bc0593e86a371b95105a9e1c989876b7dbd1874837714c
+
+Used solely as a public photographic software regression fixture, not for
+advertising, model training, or personal enrollment. It is not bundled in the
+shipping app. NASA and the subject have not reviewed or endorsed JoFaceGuard.
+The tests' recognition results are JoFaceGuard outputs, not NASA statements.

@@ -49,12 +49,15 @@ enum QualityTests {
         for p in 0..<200 { transparent[p * 4 + 3] = 0 }
         check(!assess(transparent).accepted && assess(transparent).reason.contains("incomplete"),
               "partly transparent crop is rejected")
-        var missing = detailed
+        var darkDetail = detailed
         for p in 0..<400 {
-            missing[p * 4] = 0; missing[p * 4 + 1] = 0; missing[p * 4 + 2] = 0
+            darkDetail[p * 4] = 0; darkDetail[p * 4 + 1] = 0; darkDetail[p * 4 + 2] = 0
         }
-        check(!assess(missing).accepted && assess(missing).reason.contains("black"),
-              "opaque black missing crop is rejected")
+        check(assess(darkDetail).accepted,
+              "real dark details are not mistaken for missing crop coverage")
+        let black = assess(fixture { _, _ in 0 })
+        check(!black.accepted && black.reason.contains("Low light"),
+              "fully black opaque crop remains rejected for low light")
         check(!assess([]).accepted, "incorrect pixel count fails closed")
         check(!ImageQuality.evaluate(rgba: [], width: Int.max, height: Int.max).accepted,
               "invalid dimensions fail without overflow")

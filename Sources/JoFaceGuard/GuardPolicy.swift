@@ -31,6 +31,21 @@ struct GuardDecision: Equatable, Sendable {
     let shouldLock: Bool
 }
 
+enum FaceMatchIssue: Equatable, Sendable {
+    case none
+    case missingProfile
+    case invalidProfile
+    case invalidEmbedding
+    case invalidConfiguration
+    case ambiguous
+}
+
+struct FaceMatchResult: Equatable, Sendable {
+    let classification: FaceClassification
+    let similarity: Float?
+    let issue: FaceMatchIssue
+}
+
 /// A failure or score between the two thresholds is always inconclusive.
 /// Scores are deliberately not presented as calibrated probabilities.
 struct FaceClassifier: Sendable {
@@ -48,21 +63,34 @@ struct FaceClassifier: Sendable {
     }
 
     func classify(embedding: [Float]?, enrollment: [[Float]]) -> FaceClassification {
+        evaluate(embedding: embedding, enrollment: enrollment).classification
+    }
+
+    func evaluate(embedding: [Float]?, enrollment: [[Float]]) -> FaceMatchResult {
         guard expectedEmbeddingDimension > 0,
               minimumEnrollmentSamples > 0,
               joThreshold.isFinite, unknownThreshold.isFinite,
               (-1...1).contains(unknownThreshold), (-1...1).contains(joThreshold),
-              unknownThreshold < joThreshold,
-              enrollment.count >= minimumEnrollmentSamples,
-              let embedding,
-              PolicyVector.isValid(embedding, dimension: expectedEmbeddingDimension),
+              unknownThreshold < joThreshold
+        else { return FaceMatchResult(classification: .uncertain, similarity: nil, issue: .invalidConfiguration) }
+        guard !enrollment.isEmpty else {
+            return FaceMatchResult(classification: .uncertain, similarity: nil, issue: .missingProfile)
+        }
+        guard enrollment.count >= minimumEnrollmentSamples,
               enrollment.allSatisfy({ PolicyVector.isValid($0, dimension: expectedEmbeddingDimension) })
-        else { return .uncertain }
+        else { return FaceMatchResult(classification: .uncertain, similarity: nil, issue: .invalidProfile) }
+        guard let embedding,
+              PolicyVector.isValid(embedding, dimension: expectedEmbeddingDimension)
+        else { return FaceMatchResult(classification: .uncertain, similarity: nil, issue: .invalidEmbedding) }
 
         let bestScore = enrollment.map { PolicyVector.cosine(embedding, $0) }.max()!
-        if bestScore >= joThreshold { return .jo }
-        if bestScore <= unknownThreshold { return .unknown }
-        return .uncertain
+        if bestScore >= joThreshold {
+            return FaceMatchResult(classification: .jo, similarity: bestScore, issue: .none)
+        }
+        if bestScore <= unknownThreshold {
+            return FaceMatchResult(classification: .unknown, similarity: bestScore, issue: .none)
+        }
+        return FaceMatchResult(classification: .uncertain, similarity: bestScore, issue: .ambiguous)
     }
 }
 

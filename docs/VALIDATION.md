@@ -2,6 +2,22 @@
 
 Date: October 5, 2026 (America/New_York). Host: Apple Silicon / macOS 27.2 (26B5091g), Apple Swift 6.4, Command Line Tools. No full Xcode installation was used.
 
+## 0.1.3 uncertain-face regression fix
+
+Jo reported another person remained uncertain with automatic locking enabled, and clarified that the person was standing with their full face in view. Reading the running app's accessibility text confirmed `守卫 · 不确定`, `守卫中` and `请让整张脸进入画面。` The old message covered multiple quality failures, so this establishes a pre-classification quality rejection, not the exact gate hit during Jo's test. Standing versus sitting is not an input to the classifier.
+
+Two false rejections were reproduced with public-domain NASA portraits. The Collins edge fixture has a detector box extending 6.43 pixels outside the image, but complete landmarks and zero missing aligned pixels. The Armstrong portrait has 2.87% opaque black pixels, despite good illumination and detail. The old margin and black-pixel gates reject these usable faces. The fix checks landmark geometry and actual aligned alpha coverage, clips only emitted tracking bounds, and preserves pose, size, lighting, blur and capture-quality gates. A genuinely cut-off portrait and a dimmed portrait remain rejected.
+
+Actual SFace inference gave cross-person cosine approximately 0.080–0.082 across runs (Unknown at the unchanged 0.20 boundary) and cropped same-person cosine 0.98845 (Jo at the unchanged 0.50 boundary). The accepted edge stranger emitted one lock decision after two controlled seconds without invoking any lock API. Repeated reference vectors satisfy enrollment count only; these two public photos are not a population-accuracy benchmark or a replacement for webcam testing.
+
+The UI now distinguishes quality failure, unavailable/invalid enrollment, failed feature extraction, ambiguous similarity, and invalid continuity evidence. No face images or embeddings are written to diagnostic logs. The classifier/timer suite now passes 115 checks, including diagnostic result consistency; quality/alignment checks also pass. Native release compilation and bundled-model smoke passed. Real stranger recognition and actual screen locking after this repair still require Jo's follow-up test.
+
+```sh
+make test
+JO_FACE_GUARD_MODEL="$PWD/Resources/Models/SFace.mlpackage" make crop-test
+make release
+```
+
 ## 0.1.1 enrollment regression fix
 
 Jo reported that enrollment never advanced despite adjusting head position. Reproduction with the NASA public-domain astronaut fixture confirmed that the landmarks-only request implicitly used rectangle detector revision 2: `pitch` was nil, so the old pipeline rejected the portrait with `Head pose unavailable`. The UI incorrectly translated missing data into a request to keep turning the head.
@@ -17,7 +33,7 @@ make test
 JO_FACE_GUARD_MODEL="$PWD/Resources/Models/SFace.mlpackage" ./build/enrollment-regression-tests Tests/Fixtures/astronaut.png
 ```
 
-## Completed checks
+## Initial release checks
 
 | Check | Observed result |
 | --- | --- |
@@ -34,9 +50,11 @@ JO_FACE_GUARD_MODEL="$PWD/Resources/Models/SFace.mlpackage" ./build/enrollment-r
 | Runtime source inspection | No URLSession/URLRequest, password injection, keyboard event synthesis, update download or runtime upload path. Model build scripts download public model/dependency assets only. |
 | Review fixes | Serialized profile saves/deletes, rejected stale storage callbacks, allowed recovery from unreadable/incompatible profiles, invalidated old lock-status callbacks, and based arming status on validated policy output. Independent re-review and full typecheck passed. |
 
-The model fixtures are synthetic patterns, **not people or biometric enrollment records**. No Jo face image or embedding is committed to Git or included in the build.
+The model-conversion fixtures are synthetic patterns. Subsequent enrollment/crop tests use attributed public NASA portraits, never Jo's images or biometric enrollment records. No Jo face image or embedding is committed to Git or included in the build.
 
-## Not yet measured or exercised
+## Initial release gaps and current acceptance status
+
+Jo has since used enrollment and enabled automatic locking, but reported the unfamiliar-person test failed by remaining uncertain. That feedback does not establish a successful profile round trip, reliable recognition, or an actual lock. The following have not been systematically validated by the implementation tests:
 
 - Real camera permission flow, actual webcam capture, camera sharing/interruption, and external-camera orientation.
 - Jo enrollment and saved-profile round trip using Jo's genuine face, including glasses and varied lighting.
@@ -53,7 +71,7 @@ Use **Observe** first; it cannot lock.
 1. Enroll all five instructed poses with one person visible and ordinary desk lighting. Cancel mid-enrollment once and verify the old complete profile remains.
 2. Observe Jo for several minutes: neutral face, slight turns, glasses, ordinary working distance. Record any Unknown results; do not enable automatic locking if Jo becomes Unknown.
 3. Cover the camera, dim the room, move out of frame, turn far sideways, and invite a second consenting person into the frame. Confirm no countdown survives uncertainty; complete darkness must read uncertain.
-4. Let that other person sit alone in normal light. In Observe, confirm a continuous stranger countdown reaches two seconds; pass-by shorter than two seconds must not accumulate across interruptions.
+4. Let that other person appear alone in normal light, standing or sitting with a sufficiently large, clear, near-frontal face. In Observe, confirm a continuous stranger countdown reaches two seconds; pass-by shorter than two seconds must not accumulate across interruptions.
 5. Return Jo to the camera; after Jo is recognized, enable automatic locking. Repeat the controlled stranger test with work saved. Verify the real lock screen appears and the guard stays paused after unlock.
 6. Pause/quit during a countdown; disconnect the camera or open another camera app. Confirm no stale result locks the screen. Test sleep/wake and user switching.
 

@@ -260,9 +260,14 @@ final class GuardController: ObservableObject {
             return
         }
         let kind: FaceClassification
+        var match: FaceMatchResult?
         if analysis.faceCount == 0 { kind = .noFace }
         else if !analysis.qualityOK { kind = .uncertain }
-        else { kind = classifier.classify(embedding: frame.embedding, enrollment: profile?.samples ?? []) }
+        else {
+            let result = classifier.evaluate(embedding: frame.embedding, enrollment: profile?.samples ?? [])
+            match = result
+            kind = result.classification
+        }
         let decision = policy.consume(FrameEvidence(classification: kind, timestamp: frame.timestamp,
             faceBounds: analysis.bounds, embedding: frame.embedding), now: now)
         classification = decision.classification
@@ -272,7 +277,11 @@ final class GuardController: ObservableObject {
         switch decision.classification {
         case .jo: label = "Jo"; detail = "已识别为 Jo"
         case .noFace: label = "无人"; detail = "没有检测到人脸，不会触发锁屏。"
-        case .uncertain: label = "不确定"; detail = analysis.qualityOK ? "相似度不明确或资料不可用，不会触发锁屏。" : Self.qualityGuidance(analysis.reason)
+        case .uncertain:
+            label = "不确定"
+            if !analysis.qualityOK { detail = Self.qualityGuidance(analysis.reason) }
+            else if let match, match.classification == .uncertain { detail = Self.matchGuidance(match) }
+            else { detail = "本帧连续性数据无效，陌生人计时已清零。" }
         case .unknown: label = "陌生人"; detail = String(format: "连续确认 %.1f / 2.0 秒%@", elapsed, armed ? "" : "（观察模式，不会锁屏）")
         }
         status = (armed ? "守卫 · " : "观察 · ") + label
@@ -312,12 +321,13 @@ final class GuardController: ObservableObject {
 
     private static func qualityGuidance(_ reason: String) -> String {
         let text = reason.lowercased()
+        if text.contains("landmark") { return "眼睛、鼻子或嘴角定位不完整，请正对摄像头并避免遮挡。" }
+        if text.contains("crop is incomplete") { return "识别所需的脸部区域被裁切，请稍微离摄像头远一点。" }
         if text.contains("low light") || text.contains("black") { return "光线不足或画面被遮挡 · 不确定" }
         if text.contains("bright") { return "光线太强，请避开直射光 · 不确定" }
         if text.contains("multiple") { return "画面中有多个人 · 不确定" }
         if text == "no face" { return "没有检测到人脸，请面向摄像头。" }
         if text.contains("small") { return "脸部太小，请稍微靠近摄像头。" }
-        if text.contains("edge") || text.contains("incomplete") { return "请让整张脸进入画面。" }
         if text.contains("blur") || text.contains("contrast") { return "画面不够清晰，请调整光线并保持片刻。" }
         if text.contains("pose unavailable") { return "未取得头部姿态数据，请暂停后重试；无需继续转头。" }
         if text.contains("look toward") { return "侧转或抬低头幅度较大，请恢复自然正面。" }
@@ -326,5 +336,18 @@ final class GuardController: ObservableObject {
         if text.contains("alignment") || text.contains("landmark") { return "无法定位眼睛、鼻子或嘴角，请保持无遮挡的正面。" }
         if text.contains("confidence") { return "暂时无法确认人脸位置，请面向摄像头。" }
         return "无法读取有效人脸，请暂停后重新开始。"
+    }
+
+    private static func matchGuidance(_ result: FaceMatchResult) -> String {
+        switch result.issue {
+        case .missingProfile: return "尚未载入 Jo 的录入资料，请先完成录入。"
+        case .invalidProfile: return "Jo 的录入资料不完整或无效，请重新录入。"
+        case .invalidEmbedding: return "本帧人脸特征提取失败，等待下一张清晰画面。"
+        case .invalidConfiguration: return "识别设置无效，守卫不会触发锁屏。"
+        case .ambiguous:
+            let score = result.similarity.map { String(format: "%.3f", $0) } ?? "—"
+            return "画面合格，但与 Jo 的相似度 \(score) 处于不确定区间，暂不锁屏。"
+        case .none: return "正在等待连续、有效的识别结果。"
+        }
     }
 }
