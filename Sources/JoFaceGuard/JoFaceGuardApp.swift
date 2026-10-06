@@ -20,6 +20,12 @@ enum JoFaceGuardApp {
         }
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
+        if !CommandLine.arguments.contains("--ui-smoke-test"),
+           let existing = NSRunningApplication.runningApplications(withBundleIdentifier: "io.github.yuezjo.JoFaceGuard")
+            .first(where: { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }) {
+            existing.activate(options: [.activateAllWindows])
+            return
+        }
         let delegate = AppDelegate()
         app.delegate = delegate
         withExtendedLifetime(delegate) { app.run() }
@@ -96,6 +102,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if controller.enrolling { controller.pause() }
     }
     func applicationWillTerminate(_ notification: Notification) { controller.pause() }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showWindow()
+        return true
+    }
 }
 
 struct GuardView: View {
@@ -107,7 +117,7 @@ struct GuardView: View {
                 Image(systemName: "person.crop.circle.badge.checkmark")
                     .font(.system(size: 34)).foregroundStyle(.purple)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("JoFaceGuard").font(.title2.bold())
+                    Text("JoFaceGuard · \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")").font(.title2.bold())
                     Text("只有明确的陌生人，才会启动两秒确认。")
                         .font(.callout).foregroundStyle(.secondary)
                 }

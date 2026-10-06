@@ -1,0 +1,20 @@
+Fixture: astronaut.png (512 x 512 RGB)
+Subject: NASA astronaut Eileen Collins
+Creator/source: NASA, distributed as the scikit-image astronaut sample image
+Rights: Public domain; no known copyright restrictions.
+
+The scikit-image documentation identifies this image as NASA imagery and states
+that it was released into the public domain:
+https://scikit-image.org/docs/0.20.x/api/skimage.data.html#skimage.data.astronaut
+
+Downloaded from the official scikit-image repository, pinned v0.20.0 tag:
+https://raw.githubusercontent.com/scikit-image/scikit-image/v0.20.0/skimage/data/astronaut.png
+
+Original NASA Great Images reference supplied by scikit-image:
+https://flic.kr/p/r9qvLn
+
+SHA-256 of the unmodified fixture:
+88431cd9653ccd539741b555fb0a46b61558b301d4110412b5bc28b5e3ea6cb5
+
+Used only as a regression-test image. It is not Jo's enrollment data, does not
+identify any app user, and is not bundled into the shipping application.

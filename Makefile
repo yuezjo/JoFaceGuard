@@ -3,13 +3,13 @@ FLAGS := -parse-as-library -target arm64-apple-macos14.0 -swift-version 5
 CORE := Sources/FaceUnlock/Core/FaceAligner.swift Sources/FaceUnlock/Core/FaceGeometry.swift Sources/FaceUnlock/Core/VectorMath.swift
 CODESIGN_ID ?= -
 
-.PHONY: all release model test model-test smoke run install clean
+.PHONY: all release model test model-test enrollment-test smoke run install clean
 all: release
 release:
 	CODESIGN_ID="$(CODESIGN_ID)" python3 scripts/build_app.py
 model:
 	./scripts/setup_model.sh
-test:
+test: enrollment-test
 	@mkdir -p build
 	swiftc $(FLAGS) Sources/JoFaceGuard/GuardPolicy.swift Tests/PolicyTests.swift -o build/policy-tests
 	./build/policy-tests
@@ -19,6 +19,10 @@ model-test:
 	@mkdir -p build
 	swiftc $(FLAGS) -framework CoreML Sources/JoFaceGuard/EmbeddingModel.swift Tests/ModelTests.swift -o build/model-tests
 	JO_FACE_GUARD_MODEL="$(CURDIR)/Resources/Models/SFace.mlpackage" ./build/model-tests Tests/Fixtures/sface-reference.json
+enrollment-test:
+	@mkdir -p build
+	swiftc $(FLAGS) -framework CoreML $(CORE) Sources/JoFaceGuard/FacePipeline.swift Sources/JoFaceGuard/EmbeddingModel.swift Tests/EnrollmentRegressionTests.swift -o build/enrollment-regression-tests
+	./build/enrollment-regression-tests Tests/Fixtures/astronaut.png
 smoke:
 	python3 scripts/build_app.py --smoke-only
 install:

@@ -1,6 +1,21 @@
-# JoFaceGuard 0.1.0 — validation record
+# JoFaceGuard — validation record
 
 Date: October 5, 2026 (America/New_York). Host: Apple Silicon / macOS 27.2 (26B5091g), Apple Swift 6.4, Command Line Tools. No full Xcode installation was used.
+
+## 0.1.1 enrollment regression fix
+
+Jo reported that enrollment never advanced despite adjusting head position. Reproduction with the NASA public-domain astronaut fixture confirmed that the landmarks-only request implicitly used rectangle detector revision 2: `pitch` was nil, so the old pipeline rejected the portrait with `Head pose unavailable`. The UI incorrectly translated missing data into a request to keep turning the head.
+
+The pipeline now explicitly runs `VNDetectFaceRectanglesRequestRevision3` and passes its observations into the landmarks request. The reference portrait now has finite yaw/pitch/roll. The revision-3 detector assigns confidence about 0.876 to this usable portrait, so the detection gate changed from 0.90 to 0.80 while preserving the independent pose, face-size, capture-quality, raw-light, blur, crop and identity gates. It remains a provisional threshold, not a measured accuracy claim.
+
+Added `Tests/EnrollmentRegressionTests.swift` and the public-domain reference image with its source, checksum and attribution. The production pipeline passes this portrait at 1024×1024 and 1280×720 camera dimensions and rejects a dimmed version as uncertain. Actual Core ML inference on the accepted aligned face returns 128 finite unit-normalized features. This covers real face detection missing from the initial synthetic tests; it does not substitute for Jo's camera acceptance test.
+
+The updated UI distinguishes unavailable pose data from an actually unsuitable head angle, explicitly says when a frame is ready to capture, and shows version 0.1.1. Duplicate launches activate the existing instance to avoid camera contention. No Jo camera image was captured, saved or committed during this repair.
+
+```sh
+make test
+JO_FACE_GUARD_MODEL="$PWD/Resources/Models/SFace.mlpackage" ./build/enrollment-regression-tests Tests/Fixtures/astronaut.png
+```
 
 ## Completed checks
 

@@ -29,29 +29,43 @@ final class FacePipeline {
             return rejected(count: -1, reason: reason)
         }
         let handler = VNImageRequestHandler(cvPixelBuffer: buffer, orientation: .up)
-        let landmarksRequest = VNDetectFaceLandmarksRequest()
-        landmarksRequest.revision = VNDetectFaceLandmarksRequestRevision3
-
+        // Landmarks revision 3 implicitly uses the older rectangle detector (rev 2),
+        // which does not populate pitch. Explicit rectangle rev 3 is essential:
+        // otherwise every face is rejected for missing pose, regardless of movement.
+        let rectanglesRequest = VNDetectFaceRectanglesRequest()
+        rectanglesRequest.revision = VNDetectFaceRectanglesRequestRevision3
         do {
-            try handler.perform([landmarksRequest])
+            try handler.perform([rectanglesRequest])
         } catch {
             return rejected(count: -1, reason: "Face detection unavailable")
         }
 
-        guard let faces = landmarksRequest.results else {
+        guard let faces = rectanglesRequest.results else {
             return rejected(count: -1, reason: "Face detection returned no result")
         }
         guard !faces.isEmpty else { return rejected(count: 0, reason: "No face") }
         // Selecting only the largest face can hide Jo beside a visitor. Version 1
         // intentionally makes every multiple-face frame uncertain.
-        guard faces.count == 1, let face = faces.first else {
+        guard faces.count == 1, let rectangle = faces.first else {
             return rejected(count: faces.count, reason: "Multiple faces — uncertain")
+        }
+
+        let landmarksRequest = VNDetectFaceLandmarksRequest()
+        landmarksRequest.revision = VNDetectFaceLandmarksRequestRevision3
+        landmarksRequest.inputFaceObservations = [rectangle]
+        do { try handler.perform([landmarksRequest]) }
+        catch { return rejected(count: 1, reason: "Facial landmarks unavailable", face: rectangle) }
+        guard landmarksRequest.results?.count == 1, let face = landmarksRequest.results?.first else {
+            return rejected(count: 1, reason: "Facial landmarks unavailable", face: rectangle)
         }
 
         func reject(_ reason: String) -> FaceAnalysis {
             rejected(count: 1, reason: reason, face: face)
         }
-        guard face.confidence.isFinite, face.confidence >= 0.90 else {
+        // Rectangle rev 3 confidence is not calibrated like the implicit rev 2
+        // detector. A verified clear reference portrait scores ~0.876; .90 would
+        // reject it before the independent pose, capture-quality and pixel gates.
+        guard face.confidence.isFinite, face.confidence >= 0.80 else {
             return reject("Face detection confidence is low")
         }
 

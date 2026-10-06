@@ -218,7 +218,12 @@ final class GuardController: ObservableObject {
         if previewVisible { preview = frame.preview }
         let analysis = frame.analysis
         if enrolling {
-            detail = analysis.qualityOK && frame.embedding != nil ? enrollmentPrompt : Self.qualityGuidance(analysis.reason)
+            if analysis.qualityOK, frame.embedding != nil {
+                detail = capturing ? "画面合格，正在采集（本步还需 \(remainingCaptures) 张）…"
+                    : "画面合格。\(enrollmentPrompt)，点击「采集当前姿态」。"
+            } else if analysis.qualityOK {
+                detail = "人脸特征提取失败，请暂停后重新开始；无需继续调整头部。"
+            } else { detail = Self.qualityGuidance(analysis.reason) }
             guard capturing, analysis.qualityOK, let vector = frame.embedding,
                   now - lastCaptureAt >= 0.45 else { return }
             if let first = samples.first, VectorMath.cosineSimilarity(first, vector) < 0.50 {
@@ -314,7 +319,12 @@ final class GuardController: ObservableObject {
         if text.contains("small") { return "脸部太小，请稍微靠近摄像头。" }
         if text.contains("edge") || text.contains("incomplete") { return "请让整张脸进入画面。" }
         if text.contains("blur") || text.contains("contrast") { return "画面不够清晰，请调整光线并保持片刻。" }
-        if text.contains("pose") || text.contains("look toward") { return "请稍微转向摄像头。" }
-        return "暂时无法确认，请正对摄像头并保持清晰光线。"
+        if text.contains("pose unavailable") { return "未取得头部姿态数据，请暂停后重试；无需继续转头。" }
+        if text.contains("look toward") { return "侧转或抬低头幅度较大，请恢复自然正面。" }
+        if text.contains("quality is low") { return "脸部采集质量不足，请正面保持片刻，调整光线或距离。" }
+        if text.contains("quality") { return "未取得人脸画质评估，请暂停后重试。" }
+        if text.contains("alignment") || text.contains("landmark") { return "无法定位眼睛、鼻子或嘴角，请保持无遮挡的正面。" }
+        if text.contains("confidence") { return "暂时无法确认人脸位置，请面向摄像头。" }
+        return "无法读取有效人脸，请暂停后重新开始。"
     }
 }
