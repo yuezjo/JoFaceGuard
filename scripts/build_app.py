@@ -5,6 +5,7 @@ Documents may immediately restore FinderInfo onto .app/.mlpackage directories,
 making strict codesigning fail even immediately after xattr -c.
 """
 import os
+import plistlib
 from pathlib import Path
 import subprocess
 import sys
@@ -41,6 +42,16 @@ with tempfile.TemporaryDirectory(prefix='JoFaceGuard-build-') as temporary:
             (ROOT / 'docs/UPSTREAM.md', resources / 'ATTRIBUTION.md'),
         ]:
             run('/usr/bin/ditto', '--norsrc', source, destination)
+        personal_icon = ROOT / 'Resources/PersonalIcon'
+        if (personal_icon / 'AppIcon.icns').is_file():
+            for name in ('AppIcon.icns', 'BrandIcon.png', 'MenuIcon.png', 'MenuIcon@2x.png'):
+                run('/usr/bin/ditto', '--norsrc', personal_icon / name, resources / name)
+            info_path = app / 'Contents/Info.plist'
+            with info_path.open('rb') as file:
+                info = plistlib.load(file)
+            info['CFBundleIconFile'] = 'AppIcon'
+            with info_path.open('wb') as file:
+                plistlib.dump(info, file)
         (app / 'Contents/PkgInfo').write_bytes(b'APPL????')
         run('/usr/bin/xattr', '-cr', app)
         run('/usr/bin/codesign', '--force', '--sign', os.environ.get('CODESIGN_ID', '-'),

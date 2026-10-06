@@ -41,6 +41,8 @@ make run
 
 有 Developer ID 时可运行 `make release CODESIGN_ID='Developer ID Application: …'`。这不包含公证步骤，也不是 App Store 构建。
 
+本机自定义图标：`python3 scripts/make_personal_icon.py '/path/to/icon.png'`，然后重新 `make release`。工具保留原图，只生成 macOS 图标所需尺寸；App、菜单栏和窗口会使用这张图。个人图稿存于被 Git 忽略的 `Resources/PersonalIcon/`，其使用权与源码 MIT 许可分开；没有个人图稿的构建使用默认系统图标。
+
 ## 判断流程
 
 `AVFoundation 原始 BGRA → Vision 人脸/关键点/采集质量 → 原始光照与模糊检查 → 五点 112×112 对齐 → Core ML SFace → 128 维单位向量 → 三档分类 → 连续计时 → macOS 锁屏请求`

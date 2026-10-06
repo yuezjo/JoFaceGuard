@@ -13,3 +13,6 @@ Resources/Models/
 *.onnx
 
 .DS_Store
+
+# User-supplied artwork is a local customization with separate usage rights.
+Resources/PersonalIcon/

@@ -44,7 +44,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller = GuardController()
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = NSImage(systemSymbolName: "person.crop.circle.badge.checkmark", accessibilityDescription: "JoFaceGuard")
+        if let menuIcon = NSImage(named: "MenuIcon") {
+            menuIcon.size = NSSize(width: 22, height: 22)
+            menuIcon.isTemplate = false // Preserve the supplied pink cheeks and white face.
+            item.button?.image = menuIcon
+        } else {
+            item.button?.image = NSImage(systemSymbolName: "person.crop.circle.badge.checkmark", accessibilityDescription: "JoFaceGuard")
+        }
         item.button?.title = " Jo"
         let menu = NSMenu()
         statusMenuItem = NSMenuItem(title: "已暂停", action: nil, keyEquivalent: "")
@@ -114,8 +120,13 @@ struct GuardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .center) {
-                Image(systemName: "person.crop.circle.badge.checkmark")
-                    .font(.system(size: 34)).foregroundStyle(.purple)
+                if let brand = NSImage(named: "BrandIcon") {
+                    Image(nsImage: brand).resizable().scaledToFit().frame(width: 44, height: 44)
+                        .accessibilityLabel("JoFaceGuard 小骷髅图标")
+                } else {
+                    Image(systemName: "person.crop.circle.badge.checkmark")
+                        .font(.system(size: 34)).foregroundStyle(.purple)
+                }
                 VStack(alignment: .leading, spacing: 3) {
                     Text("JoFaceGuard · \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")").font(.title2.bold())
                     Text("只有明确的陌生人，才会启动两秒确认。")
